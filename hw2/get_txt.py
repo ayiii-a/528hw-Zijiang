@@ -15,7 +15,11 @@ def local_source(directory):
 
 
 def gcs_source(bucket_name, prefix):
+    import socket
+    import urllib3.util.connection
     from google.cloud import storage    # only needed when reading from GCS
+    # connect over IPv4 only: on Cloud Shell the IPv6 route to GCS was ~4.5x slower
+    urllib3.util.connection.allowed_gai_family = lambda: socket.AF_INET
     client = storage.Client.create_anonymous_client()
     bucket = client.bucket(bucket_name)
     names = sorted(b.name[len(prefix):]
