@@ -15,19 +15,32 @@ def parse_links(text):
 
 
 
-def build_graph(names, read):
+def show_progress(label, done, n, start):
+    """one self-overwriting status line on stderr, refreshed every 1%"""
+    if done % max(1, n // 100) and done != n:
+        return
+    elapsed = time.perf_counter() - start
+    eta = elapsed / done * (n - done)
+    print(f"\r{label} {done}/{n} ({done * 100 // n}%)  elapsed {elapsed:.0f}s  eta {eta:.0f}s",
+          end="\n" if done == n else "", file=sys.stderr, flush=True)
+
+
+def build_graph(names, read, progress=False):
     index = {name: i for i, name in enumerate(names)}
     out_adj = [None] * len(names)
     unknown = 0
+    start = time.perf_counter()
     for i, name in enumerate(names):
         targets = []
         for link in parse_links(read(name)):
             j = index.get(link)
             if j is None:
-                unknown += 1        
+                unknown += 1
             else:
                 targets.append(j)
         out_adj[i] = targets
+        if progress:
+            show_progress("download+parse", i + 1, len(names), start)
     return out_adj, unknown
 
 
@@ -59,7 +72,6 @@ def closeness(adj, progress=False):
     n = len(adj)
     scores = []
     start = time.perf_counter()
-    step = max(1, n // 100)     # refresh every 1%
     for s in range(n):
         dist = [-1] * n
         dist[s] = 0
@@ -74,14 +86,8 @@ def closeness(adj, progress=False):
                     total += dist[v]
                     q.append(v)
         scores.append((reached / (n - 1)) * (reached / total) if total else 0.0)
-        done = s + 1
-        if progress and (done % step == 0 or done == n):
-            elapsed = time.perf_counter() - start
-            eta = elapsed / done * (n - done)
-            print(f"\rcloseness {done}/{n} ({done * 100 // n}%)  "
-                  f"elapsed {elapsed:.0f}s  eta {eta:.0f}s", end="", file=sys.stderr, flush=True)
-    if progress:
-        print(file=sys.stderr)
+        if progress:
+            show_progress("closeness", s + 1, n, start)
     return scores
 
 

@@ -1,4 +1,5 @@
 import argparse
+import sys
 import time
 
 from graph_function import build_graph, reverse, pagerank, best_closeness
@@ -34,8 +35,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     t0 = time.perf_counter()
+    print("listing files...", file=sys.stderr, flush=True)
     names, read = local_source(args.local) if args.local else gcs_source(args.bucket, args.prefix)
-    outadj, unknown = build_graph(names, read)
+    outadj, unknown = build_graph(names, read, progress=True)
 
     inadj = reverse(outadj)
     t1 = time.perf_counter()
@@ -47,6 +49,7 @@ if __name__ == "__main__":
     in_stats = get_stats("in-degree", [len(sources) for sources in inadj])
     t2 = time.perf_counter()
 
+    print("pagerank...", file=sys.stderr, flush=True)
     pr = pagerank(outadj, inadj)
     t3 = time.perf_counter()
 
