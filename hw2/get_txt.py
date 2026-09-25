@@ -1,5 +1,9 @@
 import os
 
+# seconds per request; a stalled request is retried by the library
+# instead of hanging for the default 60s (seen on Cloud Shell)
+TIMEOUT = 10
+
 
 def local_source(directory):
     names = sorted(n for n in os.listdir(directory) if n.endswith(".html"))
@@ -15,11 +19,11 @@ def gcs_source(bucket_name, prefix):
     client = storage.Client.create_anonymous_client()
     bucket = client.bucket(bucket_name)
     names = sorted(b.name[len(prefix):]
-                   for b in client.list_blobs(bucket_name, prefix=prefix,
+                   for b in client.list_blobs(bucket_name, prefix=prefix, timeout=TIMEOUT,
                                               fields="items(name),nextPageToken")  # names only: faster
                    if b.name.endswith(".html"))
     def read(name):
-        return bucket.blob(prefix + name).download_as_text()
+        return bucket.blob(prefix + name).download_as_text(timeout=TIMEOUT)
     return names, read
 
 
