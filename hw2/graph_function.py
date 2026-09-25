@@ -16,12 +16,12 @@ def parse_links(text):
 
 
 def show_progress(label, done, n, start):
-    """one self-overwriting status line on stderr, refreshed every 1%"""
-    if done % max(1, n // 100) and done != n:
+    """one self-overwriting status line on stderr, refreshed every 0.1%"""
+    if done % max(1, n // 1000) and done != n:
         return
     elapsed = time.perf_counter() - start
     eta = elapsed / done * (n - done)
-    print(f"\r{label} {done}/{n} ({done * 100 // n}%)  elapsed {elapsed:.0f}s  eta {eta:.0f}s",
+    print(f"\r{label} {done}/{n} ({done * 100 / n:.1f}%)  elapsed {elapsed:.0f}s  eta {eta:.0f}s  ",
           end="\n" if done == n else "", file=sys.stderr, flush=True)
 
 

@@ -15,7 +15,8 @@ def gcs_source(bucket_name, prefix):
     client = storage.Client.create_anonymous_client()
     bucket = client.bucket(bucket_name)
     names = sorted(b.name[len(prefix):]
-                   for b in client.list_blobs(bucket_name, prefix=prefix)
+                   for b in client.list_blobs(bucket_name, prefix=prefix,
+                                              fields="items(name),nextPageToken")  # names only: faster
                    if b.name.endswith(".html"))
     def read(name):
         return bucket.blob(prefix + name).download_as_text()

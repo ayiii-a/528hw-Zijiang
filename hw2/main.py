@@ -37,6 +37,7 @@ if __name__ == "__main__":
     t0 = time.perf_counter()
     print("listing files...", file=sys.stderr, flush=True)
     names, read = local_source(args.local) if args.local else gcs_source(args.bucket, args.prefix)
+    print(f"found {len(names)} files, downloading...", file=sys.stderr, flush=True)
     outadj, unknown = build_graph(names, read, progress=True)
 
     inadj = reverse(outadj)
