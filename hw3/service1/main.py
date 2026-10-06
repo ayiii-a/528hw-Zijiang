@@ -1,4 +1,7 @@
+import json
+
 import functions_framework
+from google.api_core.exceptions import NotFound
 from google.cloud import storage
 
 BUCKET = "528-zz-hw2"
@@ -19,8 +22,21 @@ def requested_file(request):
     return name
 
 
+def log_error(request, status, message, **fields):
+    """Log an erroneous request twice: a simple print and a structured (JSON) entry."""
+    print(f"ERROR {status} {request.method} {request.path}: {message}")
+    print(json.dumps({"severity": "WARNING", "message": message, "status": status,
+                      "method": request.method, "path": request.path, **fields}))
+
+
 @functions_framework.http
 def serve_file(request):
     name = requested_file(request)
-    data = bucket.blob(name).download_as_bytes()
+    try:
+        data = bucket.blob(name).download_as_bytes() if name else None
+    except NotFound:
+        data = None
+    if data is None:
+        log_error(request, 404, f"file not found: {name!r}", file=name)
+        return "404 Not Found\n", 404
     return data, 200, {"Content-Type": "text/html; charset=utf-8"}
