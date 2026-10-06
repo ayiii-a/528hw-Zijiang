@@ -31,6 +31,10 @@ def log_error(request, status, message, **fields):
 
 @functions_framework.http
 def serve_file(request):
+    if request.method not in ("GET", "POST"):
+        log_error(request, 501, f"method not implemented: {request.method}")
+        return "501 Not Implemented\n", 501
+
     name = requested_file(request)
     try:
         data = bucket.blob(name).download_as_bytes() if name else None
