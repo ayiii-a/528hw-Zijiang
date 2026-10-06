@@ -1,11 +1,17 @@
 import json
+from datetime import datetime, timezone
 
 import functions_framework
 from google.api_core.exceptions import NotFound
-from google.cloud import storage
+from google.cloud import pubsub_v1, storage
 
+PROJECT = "cs528-508221"
 BUCKET = "528-zz-hw2"
+FORBIDDEN = {"north korea", "iran", "cuba", "myanmar", "iraq", "libya", "sudan", "zimbabwe", "syria"}
+
 bucket = storage.Client().bucket(BUCKET)   # authenticates as the function's service account
+publisher = pubsub_v1.PublisherClient()
+topic = publisher.topic_path(PROJECT, "forbidden-requests")
 
 
 def requested_file(request):
@@ -36,6 +42,17 @@ def serve_file(request):
         return "501 Not Implemented\n", 501
 
     name = requested_file(request)
+
+    country = request.headers.get("X-country", "").strip()
+    if country.lower() in FORBIDDEN:          # exact name: "South Sudan" is not "Sudan"
+        log_error(request, 400, f"forbidden request from {country}", country=country, file=name)
+        event = {"country": country, "file": name, "method": request.method,
+                 "client_ip": request.headers.get("X-client-IP"),
+                 "time": datetime.now(timezone.utc).isoformat()}
+        # wait for the publish: Cloud Run may pause the instance once the response is sent
+        publisher.publish(topic, json.dumps(event).encode()).result()
+        return "400 Permission Denied\n", 400
+
     try:
         data = bucket.blob(name).download_as_bytes() if name else None
     except NotFound:
