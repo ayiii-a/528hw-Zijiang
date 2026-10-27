@@ -33,11 +33,16 @@ class Conn:
     def execute(self, statement, params):
         if server.engine.broken:
             raise RuntimeError("database is down")
+        if server.engine.dead_connections:
+            server.engine.dead_connections -= 1
+            raise server.sqlalchemy.exc.OperationalError("INSERT", {}, Exception("gone"),
+                                                         connection_invalidated=True)
         rows.append((statement.text.split()[2], params))
 
 
 class Engine:
     broken = False
+    dead_connections = 0
 
     def begin(self):
         return Conn()
@@ -119,6 +124,11 @@ server.engine.broken = True
 assert request("GET", "/pages/1.html")[0] == 200
 assert any(l.startswith("DB ERROR") for l in lines) and lines[-1].startswith("TIMING")
 server.engine.broken = False
+
+# a dead pooled connection (database restarted) is retried once on a new connection
+server.engine.dead_connections = 1
+assert request("GET", "/pages/1.html")[0] == 200
+assert len(rows) == 1 and not any(l.startswith("DB ERROR") for l in lines)
 
 httpd.shutdown()
 print("all server checks passed")

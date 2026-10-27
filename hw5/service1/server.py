@@ -126,12 +126,21 @@ def send_response(handler, status, body, content_type):
 
 
 def insert_into_db(info, status):
-    """Step 4: one row in requests, plus one in failed_requests if the status is not 200."""
-    with engine.begin() as conn:             # one transaction, one commit
-        conn.execute(INSERT_REQUEST, info)
-        if status != 200:
-            conn.execute(INSERT_FAILED, {"request_time": info["received_at"],
-                                         "requested_file": info["requested_file"], "error_code": status})
+    """Step 4: one row in requests, plus one in failed_requests if the status is not 200.
+    If the pooled connection turns out to be dead (the database was stopped and started again),
+    SQLAlchemy drops the pool and the insert is tried once more on a new connection."""
+    for attempt in (1, 2):
+        try:
+            with engine.begin() as conn:     # one transaction, one commit
+                conn.execute(INSERT_REQUEST, info)
+                if status != 200:
+                    conn.execute(INSERT_FAILED, {"request_time": info["received_at"],
+                                                 "requested_file": info["requested_file"],
+                                                 "error_code": status})
+            return
+        except sqlalchemy.exc.DBAPIError as e:
+            if attempt == 2 or not e.connection_invalidated:
+                raise
 
 
 class Handler(BaseHTTPRequestHandler):
