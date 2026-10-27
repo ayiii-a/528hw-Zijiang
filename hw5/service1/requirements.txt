@@ -1,0 +1,7 @@
+google-cloud-storage
+google-cloud-logging
+google-cloud-pubsub
+cloud-sql-python-connector[pymysql]
+# PyMySQL 1.2 starts its own TLS by default, which fails inside the connector's encrypted tunnel
+PyMySQL>=1.1.3,<1.2
+SQLAlchemy

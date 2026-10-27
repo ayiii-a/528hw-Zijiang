@@ -90,3 +90,32 @@ setup_cloud_sql() {
 }
 echo "== Cloud SQL"
 setup_cloud_sql
+
+echo "== static IP and firewall"
+gcloud compute addresses describe hw5-web-ip --region="$REGION" >/dev/null 2>&1 ||
+    gcloud compute addresses create hw5-web-ip --region="$REGION"
+WEB_IP=$(gcloud compute addresses describe hw5-web-ip --region="$REGION" --format="value(address)")
+gcloud compute firewall-rules describe hw5-allow-http >/dev/null 2>&1 ||
+    gcloud compute firewall-rules create hw5-allow-http --allow=tcp:80 --target-tags=hw5-web \
+        --source-ranges=0.0.0.0/0
+
+echo "== VMs (startup.sh installs and starts the services on the first boot)"
+create_vm() {   # name, machine type, service account, role, extra flags
+    local name=$1 type=$2 sa=$3 role=$4
+    shift 4
+    if gcloud compute instances describe "$name" --zone="$ZONE" >/dev/null 2>&1; then
+        echo "$name already exists, skipped"
+    else
+        gcloud compute instances create "$name" --zone="$ZONE" --machine-type="$type" \
+            --image-family=debian-12 --image-project=debian-cloud \
+            --service-account="$sa" --scopes=cloud-platform \
+            --metadata=role="$role" --metadata-from-file=startup-script="$HERE/startup.sh" "$@"
+    fi
+}
+# e2-small: an e2-micro only gets 0.25 vCPU over time, too little for hours of requests with DB writes
+create_vm hw5-web e2-small "$WEB_SA" web --address="$WEB_IP" --tags=hw5-web
+create_vm hw5-reporter e2-micro "$REPORTER_SA" reporter
+
+echo
+echo "Done. The services start 1-2 minutes after their VM is created."
+echo "  web server: http://$WEB_IP/pages/0.html"
