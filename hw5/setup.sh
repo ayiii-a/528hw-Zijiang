@@ -81,7 +81,12 @@ setup_cloud_sql() {
     gcloud sql users set-password root --host=% --instance="$INSTANCE" --password="$password"
     [ -x "$venv/bin/python" ] || python3 -m venv "$venv"
     "$venv/bin/pip" install -q -r "$HERE/requirements-setup.txt"
-    DB_ROOT_PASSWORD=$password "$venv/bin/python" "$HERE/setup_schema.py"
+    if ! DB_ROOT_PASSWORD=$password "$venv/bin/python" "$HERE/setup_schema.py"; then
+        # remove the half-made database so that the next run creates the schema again
+        gcloud sql databases delete "$DB" --instance="$INSTANCE" --quiet
+        echo "schema setup failed; database $DB removed, fix the error and run setup.sh again" >&2
+        exit 1
+    fi
 }
 echo "== Cloud SQL"
 setup_cloud_sql
