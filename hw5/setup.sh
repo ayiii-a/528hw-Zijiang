@@ -14,6 +14,7 @@ INSTANCE=hw5-db                        # Cloud SQL for MySQL instance
 DB=hw5
 WEB_SA=hw5-web-server@$PROJECT.iam.gserviceaccount.com
 REPORTER_SA=hw5-reporter@$PROJECT.iam.gserviceaccount.com
+STOPPER_SA=hw5-db-stopper@$PROJECT.iam.gserviceaccount.com
 HERE=$(cd "$(dirname "$0")" && pwd)
 export CLOUDSDK_CORE_PROJECT=$PROJECT  # every gcloud command below uses this project
 
@@ -31,7 +32,7 @@ gcloud pubsub subscriptions describe "$SUBSCRIPTION" >/dev/null 2>&1 ||
     gcloud pubsub subscriptions create "$SUBSCRIPTION" --topic="$TOPIC"
 
 echo "== service accounts and permissions"
-for sa in "$WEB_SA" "$REPORTER_SA"; do
+for sa in "$WEB_SA" "$REPORTER_SA" "$STOPPER_SA"; do
     gcloud iam service-accounts describe "$sa" >/dev/null 2>&1 ||
         gcloud iam service-accounts create "${sa%%@*}"
 done
@@ -116,6 +117,27 @@ create_vm() {   # name, machine type, service account, role, extra flags
 create_vm hw5-web e2-small "$WEB_SA" web --address="$WEB_IP" --tags=hw5-web
 create_vm hw5-reporter e2-micro "$REPORTER_SA" reporter
 
+echo "== Cloud Function that stops the database, called every hour by Cloud Scheduler"
+# custom role: read the instance and change its activation policy, nothing else
+gcloud iam roles describe hw5DbStopper --project="$PROJECT" >/dev/null 2>&1 ||
+    gcloud iam roles create hw5DbStopper --project="$PROJECT" --title="HW5 database stopper" \
+        --permissions=cloudsql.instances.get,cloudsql.instances.update
+retry gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$STOPPER_SA" \
+    --role="projects/$PROJECT/roles/hw5DbStopper" --condition=None
+gcloud functions deploy hw5-db-stopper --gen2 --runtime=python312 --region="$REGION" \
+    --source="$HERE/db_stopper" --entry-point=stop_db --trigger-http --no-allow-unauthenticated \
+    --service-account="$STOPPER_SA" --memory=256Mi --timeout=60s --quiet
+# only the scheduler job (which calls with an OIDC token of the same account) may invoke it
+retry gcloud functions add-invoker-policy-binding hw5-db-stopper --region="$REGION" \
+    --member="serviceAccount:$STOPPER_SA"
+STOPPER_URL=$(gcloud functions describe hw5-db-stopper --gen2 --region="$REGION" --format="value(serviceConfig.uri)")
+gcloud scheduler jobs describe hw5-db-stopper-hourly --location="$REGION" >/dev/null 2>&1 ||
+    gcloud scheduler jobs create http hw5-db-stopper-hourly --location="$REGION" \
+        --schedule="0 * * * *" --time-zone=UTC --uri="$STOPPER_URL" --http-method=POST \
+        --oidc-service-account-email="$STOPPER_SA" --oidc-token-audience="$STOPPER_URL"
+
 echo
 echo "Done. The services start 1-2 minutes after their VM is created."
 echo "  web server: http://$WEB_IP/pages/0.html"
+echo "The database is stopped at the start of every hour. While working with it, pause the job:"
+echo "  gcloud scheduler jobs pause hw5-db-stopper-hourly --location=$REGION    (resume: ... resume ...)"
