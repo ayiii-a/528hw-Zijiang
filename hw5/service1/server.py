@@ -207,9 +207,13 @@ def main():
     publisher = pubsub_v1.PublisherClient()
     topic_path = publisher.topic_path(PROJECT, TOPIC)
     connector = Connector()
-    engine = sqlalchemy.create_engine(       # pool of logged-in connections shared by the threads
+    # pool of logged-in connections shared by the threads. When the instance is stopped, its old
+    # connections never answer again, so reads and writes time out after 10 s instead of hanging
+    # (an insert normally takes a few ms); insert_into_db then retries on a new connection.
+    engine = sqlalchemy.create_engine(
         "mysql+pymysql://",
-        creator=lambda: connector.connect(INSTANCE, "pymysql", user=DB_USER, db=DB, enable_iam_auth=True),
+        creator=lambda: connector.connect(INSTANCE, "pymysql", user=DB_USER, db=DB, enable_iam_auth=True,
+                                          read_timeout=10, write_timeout=10),
         pool_size=5, max_overflow=5, pool_recycle=1800)
     server = ThreadingHTTPServer(("", PORT), Handler)    # one thread per request
     log(f"serving gs://{BUCKET} on port {PORT}, recording requests in {INSTANCE}/{DB}")
