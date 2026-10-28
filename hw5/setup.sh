@@ -49,10 +49,27 @@ retry gcloud pubsub subscriptions add-iam-policy-binding "$SUBSCRIPTION" --membe
 
 # Cloud SQL: start the instance if it exists, otherwise create it; create and fill the
 # database only if it does not exist yet
+# Waits until the instance is set to run (ALWAYS) and is RUNNABLE, for up to 30 minutes. The start
+# request is sent without waiting (--async) and sent again while it has not taken effect, because
+# Cloud SQL refuses it while another operation, such as the stop of cleanup.sh, is still running.
+wait_until_running() {
+    local status
+    for _ in $(seq 90); do
+        status=$(gcloud sql instances describe "$INSTANCE" --format="csv[no-heading](settings.activationPolicy,state)") || return 1
+        [ "$status" = "ALWAYS,RUNNABLE" ] && return 0
+        if [ "${status%%,*}" != ALWAYS ]; then
+            gcloud sql instances patch "$INSTANCE" --activation-policy=ALWAYS --async --quiet >/dev/null 2>&1 || true
+        fi
+        echo "  $status, waiting"
+        sleep 20
+    done
+    echo "instance $INSTANCE did not start within 30 minutes" >&2
+    return 1
+}
+
 setup_cloud_sql() {
     if gcloud sql instances describe "$INSTANCE" >/dev/null 2>&1; then
         echo "instance $INSTANCE exists, starting it"
-        gcloud sql instances patch "$INSTANCE" --activation-policy=ALWAYS --quiet
     else
         echo "creating instance $INSTANCE (takes 5-10 minutes)"
         gcloud sql instances create "$INSTANCE" --database-version=MYSQL_8_4 --edition=enterprise \
@@ -60,12 +77,7 @@ setup_cloud_sql() {
             --database-flags=cloudsql_iam_authentication=on ||
             echo "gcloud stopped waiting; checking the instance state"
     fi
-    local state
-    while state=$(gcloud sql instances describe "$INSTANCE" --format="value(state)") && [ "$state" != RUNNABLE ]; do
-        echo "  state $state, waiting"
-        sleep 20
-    done
-    [ "$state" = RUNNABLE ]
+    wait_until_running
 
     # the web server logs in with its service account (IAM database authentication), no password
     gcloud sql users list --instance="$INSTANCE" --format="value(name)" | grep -x "${WEB_SA%%@*}" >/dev/null ||

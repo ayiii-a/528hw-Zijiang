@@ -24,6 +24,6 @@ gcloud compute firewall-rules describe hw5-allow-http >/dev/null 2>&1 &&
 
 echo "== Cloud SQL (stopped, not deleted)"
 gcloud sql instances describe hw5-db >/dev/null 2>&1 &&
-    gcloud sql instances patch hw5-db --activation-policy=NEVER --quiet
+    gcloud sql instances patch hw5-db --activation-policy=NEVER --async --quiet
 
 echo "Done."
