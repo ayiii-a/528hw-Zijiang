@@ -48,6 +48,13 @@ STATS = [
      f"SELECT age, COUNT(*) AS requests FROM requests WHERE {CLIENT} GROUP BY age ORDER BY requests DESC"),
     ("6. requests by income group (most first)",
      f"SELECT income, COUNT(*) AS requests FROM requests WHERE {CLIENT} GROUP BY income ORDER BY requests DESC"),
+    ("7. same seed: groups of identical requests with an odd count (0 = every request came from both clients)",
+     " UNION ALL ".join(
+         f"SELECT '{name}' AS identical_in, COUNT(*) AS `groups`, SUM(n % 2) AS odd_groups FROM"
+         f" (SELECT COUNT(*) AS n FROM requests WHERE {CLIENT} GROUP BY {columns}) AS g"
+         for name, columns in [("file", "requested_file"),
+                               ("file, gender, age, income, time", "requested_file, gender, age, income, time_of_day"),
+                               ("file, country, client IP", "requested_file, country, client_ip")])),
 ]
 RESET = ["TRUNCATE TABLE failed_requests", "TRUNCATE TABLE requests"]
 

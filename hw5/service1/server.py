@@ -14,6 +14,7 @@ time.perf_counter_ns(); each request prints one line to the journal:
 """
 import json
 import os
+import sys
 import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -49,8 +50,10 @@ print_lock = threading.Lock()
 
 
 def log(line):
-    with print_lock:                 # one line at a time from the request threads
-        print(line, flush=True)
+    """One complete line per write, so that lines of concurrent threads never mix in the journal."""
+    with print_lock:
+        sys.stdout.write(line + "\n")
+        sys.stdout.flush()
 
 
 def object_name(raw):
@@ -145,6 +148,9 @@ def insert_into_db(info, status):
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "hw5-file-server"
+
+    def log_message(self, format, *args):    # access log: same lock and stream as log()
+        log(f"{self.address_string()} - - [{self.log_date_time_string()}] {format % args}")
 
     def parse_request(self):
         self.started = perf_counter_ns()    # the request line is read; parsing the headers starts

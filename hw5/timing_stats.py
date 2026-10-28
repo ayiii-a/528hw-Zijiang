@@ -29,7 +29,7 @@ def summary(label, ms):
 def main(path):
     ms = {key: [] for key, _ in STAGES}
     total_by_status = {}
-    malformed = []
+    malformed, glued = [], 0
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             if not line.startswith("TIMING "):
@@ -38,15 +38,23 @@ def main(path):
             if "status" not in fields or not all(key in fields for key, _ in STAGES):
                 malformed.append(line.rstrip())
                 continue
-            total_by_status.setdefault(fields["status"], []).append(int(fields["total_ns"]) / 1e6)
+            # The newline of a TIMING line was written separately (python -u), so now and then an
+            # access-log line of another thread got glued to total_ns, the last field; the step
+            # times before it are intact. A value that is not a plain number is left out.
+            if not fields["total_ns"].isdigit():
+                glued += 1
+            else:
+                total_by_status.setdefault(fields["status"], []).append(int(fields["total_ns"]) / 1e6)
             if fields["status"] in CLIENT_STATUSES:
                 for key, _ in STAGES:
-                    if fields[key] != "-":              # gcs_ns is "-" when no file was read
+                    if fields[key].isdigit():           # gcs_ns is "-" when no file was read
                         ms[key].append(int(fields[key]) / 1e6)
 
     if malformed:
         print(f"skipped {len(malformed)} malformed TIMING lines, the first one: {malformed[0]!r}")
-    print(f"{len(ms['total_ns'])} requests with status 200 or 400; times in milliseconds")
+    if glued:
+        print(f"{glued} TIMING lines had another log line glued to total_ns; their total is left out")
+    print(f"{len(ms['extract_ns'])} requests with status 200 or 400; times in milliseconds")
     print(f"\n  {'step':42} {'count':>8} {'mean':>9} {'median':>9} {'p95':>9} {'p99':>9} {'max':>9}")
     for key, label in STAGES:
         print(summary(label, ms[key]))
