@@ -19,27 +19,35 @@ SHOW = [
     ("requests, latest 5 rows", "SELECT * FROM requests ORDER BY id DESC LIMIT 5"),
     ("failed_requests, latest 5 rows", "SELECT * FROM failed_requests ORDER BY id DESC LIMIT 5"),
 ]
+# The server is public, so internet scanners also send requests (e.g. GET /admin/config.php).
+# The statistics count only the requests of the provided client, which always asks for pages/<n>.html.
+CLIENT = "requested_file REGEXP '^pages/[0-9]+[.]html$'"
 STATS = [
-    ("0. test period and throughput",
+    ("0. test period and throughput (client requests)",
      "SELECT MIN(received_at) AS first_request, MAX(received_at) AS last_request,"
      " TIMESTAMPDIFF(SECOND, MIN(received_at), MAX(received_at)) AS seconds,"
      " ROUND(COUNT(*) / TIMESTAMPDIFF(SECOND, MIN(received_at), MAX(received_at)), 1) AS requests_per_second"
-     " FROM requests"),
+     f" FROM requests WHERE {CLIENT}"),
+    ("   rows left out: other traffic, e.g. internet scanners",
+     f"SELECT (SELECT COUNT(*) FROM requests WHERE NOT {CLIENT}) AS requests,"
+     f" (SELECT COUNT(*) FROM failed_requests WHERE NOT {CLIENT}) AS failed_requests"),
     ("1. successful vs failed requests",
-     "SELECT COUNT(*) AS total, COUNT(*) - (SELECT COUNT(*) FROM failed_requests) AS successful,"
-     " (SELECT COUNT(*) FROM failed_requests) AS failed FROM requests"),
+     f"SELECT COUNT(*) AS total, COUNT(*) - (SELECT COUNT(*) FROM failed_requests WHERE {CLIENT}) AS successful,"
+     f" (SELECT COUNT(*) FROM failed_requests WHERE {CLIENT}) AS failed FROM requests WHERE {CLIENT}"),
     ("   failed requests by error code",
-     "SELECT error_code, COUNT(*) AS requests FROM failed_requests GROUP BY error_code ORDER BY error_code"),
-    ("2. requests from banned countries", "SELECT COUNT(*) AS requests FROM requests WHERE is_banned"),
+     f"SELECT error_code, COUNT(*) AS requests FROM failed_requests WHERE {CLIENT}"
+     " GROUP BY error_code ORDER BY error_code"),
+    ("2. requests from banned countries",
+     f"SELECT COUNT(*) AS requests FROM requests WHERE {CLIENT} AND is_banned"),
     ("3. requests by gender",
-     "SELECT gender, COUNT(*) AS requests FROM requests GROUP BY gender ORDER BY requests DESC"),
+     f"SELECT gender, COUNT(*) AS requests FROM requests WHERE {CLIENT} GROUP BY gender ORDER BY requests DESC"),
     ("4. top 5 countries",
-     "SELECT country, COUNT(*) AS requests FROM requests GROUP BY country"
+     f"SELECT country, COUNT(*) AS requests FROM requests WHERE {CLIENT} GROUP BY country"
      " ORDER BY requests DESC, country LIMIT 5"),
     ("5. requests by age group (most first)",
-     "SELECT age, COUNT(*) AS requests FROM requests GROUP BY age ORDER BY requests DESC"),
+     f"SELECT age, COUNT(*) AS requests FROM requests WHERE {CLIENT} GROUP BY age ORDER BY requests DESC"),
     ("6. requests by income group (most first)",
-     "SELECT income, COUNT(*) AS requests FROM requests GROUP BY income ORDER BY requests DESC"),
+     f"SELECT income, COUNT(*) AS requests FROM requests WHERE {CLIENT} GROUP BY income ORDER BY requests DESC"),
 ]
 RESET = ["TRUNCATE TABLE failed_requests", "TRUNCATE TABLE requests"]
 
