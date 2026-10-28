@@ -20,6 +20,11 @@ SHOW = [
     ("failed_requests, latest 5 rows", "SELECT * FROM failed_requests ORDER BY id DESC LIMIT 5"),
 ]
 STATS = [
+    ("0. test period and throughput",
+     "SELECT MIN(received_at) AS first_request, MAX(received_at) AS last_request,"
+     " TIMESTAMPDIFF(SECOND, MIN(received_at), MAX(received_at)) AS seconds,"
+     " ROUND(COUNT(*) / TIMESTAMPDIFF(SECOND, MIN(received_at), MAX(received_at)), 1) AS requests_per_second"
+     " FROM requests"),
     ("1. successful vs failed requests",
      "SELECT COUNT(*) AS total, COUNT(*) - (SELECT COUNT(*) FROM failed_requests) AS successful,"
      " (SELECT COUNT(*) FROM failed_requests) AS failed FROM requests"),
