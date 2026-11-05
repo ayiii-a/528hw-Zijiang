@@ -23,9 +23,7 @@ WHERE TABLE_SCHEMA = 'hw6' AND REFERENCED_TABLE_NAME IS NOT NULL
 ORDER BY FIELD(TABLE_NAME, 'client_ips', 'requests', 'failed_requests');
 
 -- 4. countries: the 9 banned countries and the first 3 others
-(SELECT * FROM hw6.countries WHERE is_banned ORDER BY name)
-UNION ALL
-(SELECT * FROM hw6.countries WHERE NOT is_banned ORDER BY country_id LIMIT 3);
+SELECT * FROM hw6.countries WHERE is_banned OR country_id <= 3 ORDER BY is_banned DESC, name;
 
 -- 5. client_ips: first 5 rows
 SELECT * FROM hw6.client_ips ORDER BY client_ip LIMIT 5;
