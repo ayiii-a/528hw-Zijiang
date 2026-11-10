@@ -3,7 +3,7 @@
 From the HTML files in gs://528-zz-hw2/pages/ the pipeline finds the 5 files with the most incoming
 links, the 5 files with the most outgoing links and the 5 most frequent word trigrams. It writes them
 to --output and prints them, with the run time, once the pipeline has finished. The same code runs
-on the laptop (DirectRunner) and on Cloud Dataflow (DataflowRunner); see README.md.
+on the laptop (FnApiRunner) and on Cloud Dataflow (DataflowRunner); see README.md.
 """
 import argparse
 import functools
